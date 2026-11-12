@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pokémon do Dia</title>
+<style>
+  :root {
+    --bg: #14161c;
+    --panel: #1d2029;
+    --line: #2e3340;
+    --text: #eceef3;
+    --muted: #8b92a5;
+    --accent: #ffcb05;
+    --ok: #2e9e5b;
+    --near: #c9952b;
+    --miss: #3a3f4d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; display: flex; justify-content: center; padding: 24px 12px 48px;
+  }
+  main { width: 100%; max-width: 860px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .meta { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+
+  .stage { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .art { width: 160px; height: 160px; flex: none; border-radius: 12px; background: #11131a; border: 1px solid var(--line);
+         display: grid; place-items: center; overflow: hidden; }
+  .art img { width: 140px; height: 140px; object-fit: contain; transition: filter .6s; }
+  .art img.hidden-art { filter: brightness(0) invert(.25); }
+  .art .q { font-size: 4rem; color: var(--line); font-weight: 700; }
+  .info { flex: 1; min-width: 220px; }
+  .info p { margin: 0 0 8px; color: var(--muted); line-height: 1.5; }
+  .info strong { color: var(--text); }
+  .tries { display: flex; gap: 6px; margin-top: 12px; }
+  .tries i { width: 28px; height: 6px; border-radius: 3px; background: var(--miss); }
+  .tries i.used { background: var(--near); }
+  .tries i.win { background: var(--ok); }
+
+  form { display: flex; gap: 8px; position: relative; }
+  input[type=text] {
+    flex: 1; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: #11131a; color: var(--text); font-size: 1rem; outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  button {
+    padding: 12px 18px; border-radius: 8px; border: 0; background: var(--accent); color: #14161c;
+    font-weight: 700; font-size: .95rem; cursor: pointer;
+  }
+  button:disabled, input:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .suggest {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5; margin: 0; padding: 4px; list-style: none;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-height: 260px; overflow-y: auto;
+  }
+  .suggest:empty { display: none; }
+  .suggest li { padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .suggest li:hover, .suggest li.active { background: var(--miss); }
+  .msg { min-height: 1.3em; margin: 10px 0 0; font-size: .9rem; color: var(--muted); }
+  .msg.err { color: #ff7b7b; }
+
+  .board { overflow-x: auto; }
+  .grid { display: grid; grid-template-columns: 150px repeat(6, minmax(84px, 1fr)); gap: 6px; min-width: 700px; }
+  .grid .h { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 4px 4px; }
+  .cell {
+    border-radius: 8px; padding: 10px 6px; min-height: 56px; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-size: .88rem; font-weight: 600; background: var(--miss); animation: pop .35s ease both;
+  }
+  .cell.name { justify-content: flex-start; gap: 6px; background: #11131a; border: 1px solid var(--line); font-weight: 500; }
+  .cell.name img { width: 36px; height: 36px; object-fit: contain; flex: none; }
+  .cell.ok { background: var(--ok); }
+  .cell.near { background: var(--near); }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+  .empty { color: var(--muted); font-size: .9rem; margin: 0; }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin-top: 14px; }
+  .legend b { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+
+  .result { text-align: center; display: none; }
+  .result.show { display: block; }
+  .result h2 { margin: 0 0 6px; font-size: 1.3rem; }
+  .result p { margin: 0 0 14px; color: var(--muted); }
+  .result .actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  textarea { width: 100%; margin-top: 12px; background: #11131a; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: inherit; display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Pokémon <span>do Dia</span></h1>
+    <div class="meta"><span id="date"></span> · próximo em <span id="countdown">--:--:--</span></div>
+  </header>
+
+  <section class="card stage">
+    <div class="art" id="art"><span class="q">?</span></div>
+    <div class="info">
+      <p>Descubra o Pokémon sorteado hoje em até <strong>6 tentativas</strong>. Cada palpite mostra o quanto ele se parece com a resposta.</p>
+      <p id="hint">A silhueta é revelada após 3 erros.</p>
+      <div class="tries" id="tries"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <form id="form" autocomplete="off">
+      <input type="text" id="guess" placeholder="Carregando Pokédex..." disabled aria-label="Nome do Pokémon">
+      <button type="submit" id="send" disabled>Tentar</button>
+      <ul class="suggest" id="suggest"></ul>
+    </form>
+    <p class="msg" id="msg"></p>
+  </section>
+
+  <section class="card result" id="result">
+    <h2 id="resTitle"></h2>
+    <p id="resText"></p>
+    <div class="actions">
+      <button id="share">Copiar resultado</button>
+    </div>
+    <textarea id="shareBox" rows="8" readonly></textarea>
+  </section>
+
+  <section class="card">
+    <div class="board">
+      <div class="grid" id="grid">
+        <div class="h">Pokémon</div><div class="h">Tipo 1</div><div class="h">Tipo 2</div>
+        <div class="h">Geração</div><div class="h">Altura</div><div class="h">Peso</div><div class="h">Cor</div>
+      </div>
+    </div>
+    <p class="empty" id="empty">Nenhum palpite ainda.</p>
+    <div class="legend">
+      <span><b style="background:var(--ok)"></b>Igual</span>
+      <span><b style="background:var(--near)"></b>Tipo existe em outra posição</span>
+      <span><b style="background:var(--miss)"></b>Diferente</span>
+      <span>↑ / ↓ a resposta é maior / menor</span>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = 'https://pokeapi.co/api/v2';
+const TOTAL = 1025;      // Pokémon existentes na Pokédex nacional
+const MAX_TRIES = 6;
+const REVEAL_AFTER = 3;  // erros até mostrar a silhueta
+
+const TYPES = { normal:'Normal', fire:'Fogo', water:'Água', electric:'Elétrico', grass:'Planta', ice:'Gelo',
+  fighting:'Lutador', poison:'Venenoso', ground:'Terra', flying:'Voador', psychic:'Psíquico', bug:'Inseto',
+  rock:'Pedra', ghost:'Fantasma', dragon:'Dragão', dark:'Sombrio', steel:'Aço', fairy:'Fada' };
+const COLORS = { black:'Preto', blue:'Azul', brown:'Marrom', gray:'Cinza', green:'Verde', pink:'Rosa',
+  purple:'Roxo', red:'Vermelho', white:'Branco', yellow:'Amarelo' };
+
+const $ = id => document.getElementById(id);
+const el = { guess: $('guess'), send: $('send'), suggest: $('suggest'), msg: $('msg'), grid: $('grid'),
+  empty: $('empty'), art: $('art'), hint: $('hint'), tries: $('tries'), result: $('result') };
+
+// ---------- Pokémon do dia: determinístico a partir da data local ----------
+function todayKey(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function dailyId(key) {          // hash FNV-1a da data -> id entre 1 e TOTAL
+  let h = 0x811c9dc5;
+  for (const c of key) { h ^= c.charCodeAt(0); h = Math.imul(h, 0x01000193); }
+  return ((h >>> 0) % TOTAL) + 1;
+}
+
+// ---------- Acesso à PokéAPI (com cache em memória) ----------
+const cache = new Map();
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+function idFromUrl(url) { return Number(url.split('/').filter(Boolean).pop()); }
+function pretty(name) { return name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' '); }
+
+async function getPokemon(id) {
+  if (cache.has(id)) return cache.get(id);
+  const [p, s] = await Promise.all([getJSON(`${API}/pokemon/${id}`), getJSON(`${API}/pokemon-species/${id}`)]);
+  const mon = {
+    id,
+    name: pretty(s.name),
+    types: p.types.sort((a, b) => a.slot - b.slot).map(t => t.type.name),
+    gen: idFromUrl(s.generation.url),
+    height: p.height / 10,   // decímetros -> metros
+    weight: p.weight / 10,   // hectogramas -> kg
+    color: s.color ? s.color.name : null,
+    art: (p.sprites.other?.['official-artwork']?.front_default) || p.sprites.front_default,
+    sprite: p.sprites.front_default || p.sprites.other?.['official-artwork']?.front_default
+  };
+  cache.set(id, mon);
+  return mon;
+}
+
+// ---------- Estado ----------
+const key = todayKey();
+const storeKey = 'pokemon-do-dia:' + key;
+let names = [];            // [{ name, label, id }]
+let target = null;
+let guesses = [];          // ids já tentados
+let over = false;
+
+function save() { try { localStorage.setItem(storeKey, JSON.stringify(guesses)); } catch (e) {} }
+function load() { try { return JSON.parse(localStorage.getItem(storeKey)) || []; } catch (e) { return []; } }
+
+// ---------- Comparação ----------
+function cmpType(guessType, slot) {
+  const want = target.types[slot] || null;
+  if (guessType === want) return 'ok';
+  if (guessType && target.types.includes(guessType)) return 'near';
+  return '';
+}
+function cmpNum(g, t) { return g === t ? ['ok', ''] : ['', t > g ? ' ↑' : ' ↓']; }
+
+function addRow(mon) {
+  el.empty.style.display = 'none';
+  const cells = [];
+  const [t1, t2] = [mon.types[0] || null, mon.types[1] || null];
+  const [gc, ga] = cmpNum(mon.gen, target.gen);
+  const [hc, ha] = cmpNum(mon.height, target.height);
+  const [wc, wa] = cmpNum(mon.weight, target.weight);
+  cells.push(['name', null]);
+  cells.push([cmpType(t1, 0), TYPES[t1] || '—']);
+  cells.push([cmpType(t2, 1), TYPES[t2] || '—']);
+  cells.push([gc, `Gen ${mon.gen}${ga}`]);
+  cells.push([hc, `${mon.height.toFixed(1)} m${ha}`]);
+  cells.push([wc, `${mon.weight.toFixed(1)} kg${wa}`]);
+  cells.push([mon.color === target.color ? 'ok' : '', COLORS[mon.color] || '—']);
+
+  cells.forEach(([cls, text], i) => {
+    const d = document.createElement('div');
+    d.className = 'cell ' + cls;
+    d.style.animationDelay = (i * 70) + 'ms';
+    if (cls === 'name') {
+      if (mon.sprite) { const img = new Image(); img.src = mon.sprite; img.alt = ''; d.appendChild(img); }
+      d.appendChild(document.createTextNode(mon.name));
+    } else d.textContent = text;
+    el.grid.appendChild(d);
+  });
+}
+
+function rowEmoji(mon) {
+  const e = c => c === 'ok' ? '🟩' : c === 'near' ? '🟨' : '⬛';
+  return [cmpType(mon.types[0] || null, 0), cmpType(mon.types[1] || null, 1),
+    mon.gen === target.gen ? 'ok' : '', mon.height === target.height ? 'ok' : '',
+    mon.weight === target.weight ? 'ok' : '', mon.color === target.color ? 'ok' : ''].map(e).join('');
+}
+
+// ---------- Interface ----------
+function renderStatus() {
+  const won = guesses.includes(target.id);
+  const wrong = guesses.length - (won ? 1 : 0);
+  el.tries.innerHTML = '';
+  for (let i = 0; i < MAX_TRIES; i++) {
+    const b = document.createElement('i');
+    if (i < guesses.length) b.className = (won && i === guesses.length - 1) ? 'win' : 'used';
+    el.tries.appendChild(b);
+  }
+  over = won || guesses.length >= MAX_TRIES;
+
+  if (over || wrong >= REVEAL_AFTER) {
+    el.art.innerHTML = '';
+    const img = new Image();
+    img.src = target.art; img.alt = over ? target.name : 'Silhueta do Pokémon do dia';
+    if (!over) img.className = 'hidden-art';
+    el.art.appendChild(img);
+    el.hint.textContent = over ? '' : 'Silhueta revelada.';
+  } else {
+    el.hint.textContent = `A silhueta é revelada após ${REVEAL_AFTER} erros (faltam ${REVEAL_AFTER - wrong}).`;
+  }
+
+  if (over) {
+    el.guess.disabled = el.send.disabled = true;
+    el.guess.placeholder = 'Volte amanhã para um novo Pokémon';
+    $('resTitle').textContent = won ? `Acertou! É ${target.name}.` : `Não foi dessa vez. Era ${target.name}.`;
+    $('resText').textContent = won
+      ? `Você descobriu em ${guesses.length} de ${MAX_TRIES} tentativas.`
+      : 'Um novo Pokémon será sorteado à meia-noite.';
+    el.result.classList.add('show');
+  }
+}
+
+function setMsg(text, err = false) { el.msg.textContent = text; el.msg.className = 'msg' + (err ? ' err' : ''); }
+
+function norm(s) { return s.trim().toLowerCase().replace(/\s+/g, '-'); }
+function matches(q) {
+  q = norm(q);
+  if (!q) return [];
+  const starts = names.filter(n => n.name.startsWith(q));
+  const has = names.filter(n => !n.name.startsWith(q) && n.name.includes(q));
+  return starts.concat(has).filter(n => !guesses.includes(n.id)).slice(0, 8);
+}
+let active = -1;
+function renderSuggest() {
+  const list = matches(el.guess.value);
+  el.suggest.innerHTML = '';
+  active = -1;
+  list.forEach(n => {
+    const li = document.createElement('li');
+    li.textContent = n.label;
+    li.addEventListener('mousedown', ev => { ev.preventDefault(); el.guess.value = n.label; el.suggest.innerHTML = ''; submit(); });
+    el.suggest.appendChild(li);
+  });
+}
+el.guess.addEventListener('input', renderSuggest);
+el.guess.addEventListener('blur', () => setTimeout(() => el.suggest.innerHTML = '', 100));
+el.guess.addEventListener('keydown', ev => {
+  const items = [...el.suggest.children];
+  if (!items.length || (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp')) return;
+  ev.preventDefault();
+  active = (active + (ev.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+  items.forEach((li, i) => li.classList.toggle('active', i === active));
+  el.guess.value = items[active].textContent;
+});
+
+async function submit() {
+  if (over) return;
+  const q = norm(el.guess.value);
+  if (!q) return;
+  let pick = names.find(n => n.name === q);
+  if (!pick) { const m = matches(q); if (m.length === 1) pick = m[0]; }
+  if (!pick) return setMsg('Pokémon não encontrado. Escolha um nome da lista.', true);
+  if (guesses.includes(pick.id)) return setMsg('Você já tentou esse Pokémon.', true);
+
+  el.send.disabled = true;
+  setMsg('Consultando PokéAPI...');
+  try {
+    const mon = await getPokemon(pick.id);
+    guesses.push(mon.id);
+    save();
+    addRow(mon);
+    el.guess.value = '';
+    el.suggest.innerHTML = '';
+    setMsg('');
+    renderStatus();
+  } catch (e) {
+    setMsg('Falha ao consultar a PokéAPI. Verifique a conexão e tente de novo.', true);
+  } finally {
+    if (!over) { el.send.disabled = false; el.guess.focus(); }
+  }
+}
+$('form').addEventListener('submit', ev => { ev.preventDefault(); submit(); });
+
+$('share').addEventListener('click', async () => {
+  const won = guesses.includes(target.id);
+  const lines = guesses.map(id => rowEmoji(cache.get(id)));
+  const text = `Pokémon do Dia ${key} — ${won ? guesses.length : 'X'}/${MAX_TRIES}\n${lines.join('\n')}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    $('share').textContent = 'Copiado!';
+    setTimeout(() => $('share').textContent = 'Copiar resultado', 1500);
+  } catch (e) {
+    const box = $('shareBox'); box.style.display = 'block'; box.value = text; box.select();
+  }
+});
+
+function tick() {
+  const now = new Date();
+  if (todayKey(now) !== key) return location.reload();   // virou o dia
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const s = Math.max(0, Math.floor((next - now) / 1000));
+  const p = n => String(n).padStart(2, '0');
+  $('countdown').textContent = `${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`;
+}
+
+async function init() {
+  $('date').textContent = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  tick(); setInterval(tick, 1000);
+  try {
+    const [list, t] = await Promise.all([
+      getJSON(`${API}/pokemon-species?limit=${TOTAL}`),
+      getPokemon(dailyId(key))
+    ]);
+    names = list.results.map(r => ({ name: r.name, label: pretty(r.name), id: idFromUrl(r.url) }));
+    target = t;
+
+    // Restaura os palpites já feitos hoje
+    const saved = load().filter(id => Number.isInteger(id) && id >= 1 && id <= TOTAL).slice(0, MAX_TRIES);
+    const mons = await Promise.all(saved.map(getPokemon));
+    guesses = saved;
+    mons.forEach(addRow);
+
+    el.guess.disabled = el.send.disabled = false;
+    el.guess.placeholder = 'Digite o nome do Pokémon (em inglês)';
+    renderStatus();
+    if (!over) el.guess.focus();
+  } catch (e) {
+    el.guess.placeholder = 'Erro ao carregar';
+    el.msg.className = 'msg err';
+    el.msg.textContent = 'Não foi possível acessar a PokéAPI. ';
+    const b = document.createElement('button');
+    b.className = 'ghost'; b.textContent = 'Tentar novamente';
+    b.onclick = () => location.reload();
+    el.msg.appendChild(b);
+  }
+}
+init();
+</script>
+</body>
+</html>
